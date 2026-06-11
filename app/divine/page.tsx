@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import PageTransition from '@/components/shared/PageTransition';
 import ShuffleAnimation from '@/components/divine/ShuffleAnimation';
@@ -13,6 +13,14 @@ import { saveReading } from '@/lib/store/history';
 import { ReadingContext, topicLabels } from '@/lib/tarot/context';
 
 type Phase = 'prepare' | 'shuffle' | 'select' | 'ritual' | 'ai-wait' | 'error';
+
+interface PendingReading {
+  signature: string;
+  drawnCards: DrawnCard[];
+  createdAt: number;
+}
+
+const PENDING_READING_KEY = 'tarot-pending-reading';
 
 function wait(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -46,6 +54,69 @@ export default function DivinePage() {
   const spread = useMemo(() => getSpread(spreadId), [spreadId]);
   const [drawnCards, setDrawnCards] = useState<DrawnCard[]>([]);
   const [errorMessage, setErrorMessage] = useState('');
+  const [errorRetryable, setErrorRetryable] = useState(true);
+
+  const readingSignature = useMemo(
+    () =>
+      JSON.stringify({
+        question,
+        mode,
+        mood,
+        topic,
+        timeRange,
+        background,
+        spreadId,
+      }),
+    [question, mode, mood, topic, timeRange, background, spreadId]
+  );
+
+  const clearPendingReading = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    sessionStorage.removeItem(PENDING_READING_KEY);
+  }, []);
+
+  const persistPendingReading = useCallback(
+    (cards: DrawnCard[]) => {
+      if (typeof window === 'undefined' || cards.length === 0) return;
+
+      const pending: PendingReading = {
+        signature: readingSignature,
+        drawnCards: cards,
+        createdAt: Date.now(),
+      };
+
+      sessionStorage.setItem(PENDING_READING_KEY, JSON.stringify(pending));
+    },
+    [readingSignature]
+  );
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !spread) return;
+
+    try {
+      const raw = sessionStorage.getItem(PENDING_READING_KEY);
+      if (!raw) return;
+
+      const pending = JSON.parse(raw) as PendingReading;
+      const isSameReading = pending.signature === readingSignature;
+      const hasExpectedCards =
+        Array.isArray(pending.drawnCards) &&
+        pending.drawnCards.length === spread.drawCount;
+
+      if (!isSameReading || !hasExpectedCards) return;
+
+      const restoreTimer = window.setTimeout(() => {
+        setDrawnCards(pending.drawnCards);
+        setErrorRetryable(true);
+        setErrorMessage('上一次抽出的牌面已保留，可以继续用同一组牌重试解析。');
+        setPhase('error');
+      }, 0);
+
+      return () => window.clearTimeout(restoreTimer);
+    } catch {
+      clearPendingReading();
+    }
+  }, [clearPendingReading, readingSignature, spread]);
 
   const handleShuffleComplete = useCallback(() => {
     setPhase('select');
@@ -53,11 +124,21 @@ export default function DivinePage() {
 
   const handleAllRevealed = useCallback((cards: DrawnCard[]) => {
     setDrawnCards(cards);
+    persistPendingReading(cards);
     setPhase('ritual');
-  }, []);
+  }, [persistPendingReading]);
 
   const handleRitualComplete = useCallback(async () => {
+    if (drawnCards.length === 0) {
+      setErrorRetryable(false);
+      setErrorMessage('没有找到已抽出的牌面，请重新抽牌。');
+      setPhase('error');
+      return;
+    }
+
     setErrorMessage('');
+    setErrorRetryable(true);
+    persistPendingReading(drawnCards);
     setPhase('ai-wait');
 
     try {
@@ -86,7 +167,14 @@ export default function DivinePage() {
 
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.reading) {
-        throw new Error(data.error || 'Reading request failed');
+        setErrorRetryable(data.retryable !== false);
+        setErrorMessage(
+          data.message ||
+            data.error ||
+            'DeepSeek 解析暂时失败。牌面已经保留，可以稍后继续重试同一组牌。'
+        );
+        setPhase('error');
+        return;
       }
 
       saveReading({
@@ -99,17 +187,32 @@ export default function DivinePage() {
         timestamp: data.timestamp,
       });
 
+      clearPendingReading();
       router.push(`/reading/${data.id}`);
     } catch (err) {
       console.error('Reading API error:', err);
+      setErrorRetryable(true);
       setErrorMessage(
         err instanceof Error && err.message
           ? err.message
-          : 'DeepSeek 解析暂时失败，请稍后重试。'
+          : 'DeepSeek 解析暂时失败。牌面已经保留，可以稍后继续重试同一组牌。'
       );
       setPhase('error');
     }
-  }, [question, mode, mood, topic, timeRange, background, drawnCards, spreadId, context, router]);
+  }, [
+    question,
+    mode,
+    mood,
+    topic,
+    timeRange,
+    background,
+    drawnCards,
+    spreadId,
+    context,
+    router,
+    clearPendingReading,
+    persistPendingReading,
+  ]);
 
   if (!spread) {
     return (
@@ -220,28 +323,39 @@ export default function DivinePage() {
         {phase === 'error' && (
           <div className="flex w-full max-w-lg flex-col items-center gap-6 rounded-[28px] border border-white/[0.08] bg-[#090d19]/78 px-6 py-8 text-center shadow-[0_30px_120px_rgba(0,0,0,0.34)]">
             <p className="text-[10px] tracking-[0.28em] text-white/[0.18]">
-              DEEPSEEK UNAVAILABLE
+              READING PRESERVED
             </p>
             <h2 className="text-xl font-normal tracking-[0.14em] text-white/78">
-              解析暂时没有连上
+              {errorRetryable ? '牌面已经保留' : '解析暂时无法继续'}
             </h2>
             <p className="text-sm leading-7 text-white/42">
               {errorMessage || 'DeepSeek 解析暂时失败，请稍后重试。'}
             </p>
+            {errorRetryable && drawnCards.length > 0 && (
+              <p className="text-xs leading-6 text-white/30">
+                你不用重新抽牌，重试会继续使用刚才这组牌面。
+              </p>
+            )}
             <div className="flex flex-wrap justify-center gap-3">
+              {errorRetryable && drawnCards.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleRitualComplete}
+                  className="rounded-full border border-white/12 bg-white/[0.055] px-5 py-2.5 text-xs tracking-[0.16em] text-white/70 transition-all duration-500 hover:border-white/24 hover:bg-white/[0.08] hover:text-white"
+                >
+                  用同一组牌重试
+                </button>
+              )}
               <button
                 type="button"
-                onClick={handleRitualComplete}
-                className="rounded-full border border-white/12 bg-white/[0.055] px-5 py-2.5 text-xs tracking-[0.16em] text-white/70 transition-all duration-500 hover:border-white/24 hover:bg-white/[0.08] hover:text-white"
-              >
-                重试解析
-              </button>
-              <button
-                type="button"
-                onClick={() => setPhase('select')}
+                onClick={() => {
+                  clearPendingReading();
+                  setDrawnCards([]);
+                  setPhase('select');
+                }}
                 className="rounded-full border border-white/10 bg-transparent px-5 py-2.5 text-xs tracking-[0.16em] text-white/42 transition-all duration-500 hover:border-white/18 hover:text-white/62"
               >
-                回到抽牌
+                重新抽牌
               </button>
             </div>
           </div>

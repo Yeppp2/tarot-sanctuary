@@ -81,7 +81,13 @@ export default function ReadingPage() {
       });
       const data = await res.json().catch(() => ({}));
 
-      if (!res.ok || !data.reading) throw new Error(data.error || 'recalibration failed');
+      if (!res.ok || !data.reading) {
+        throw new Error(
+          data.message ||
+            data.error ||
+            'DeepSeek 解析暂时失败。原解读已保留，可以稍后重试校准。'
+        );
+      }
 
       updateReading({
         ...reading,

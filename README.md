@@ -4,6 +4,7 @@
 
 - 线上网站：[https://tarot-sanctuary.netlify.app/](https://tarot-sanctuary.netlify.app/)
 - GitHub 仓库：[https://github.com/Yeppp2/tarot-sanctuary](https://github.com/Yeppp2/tarot-sanctuary)
+- License：[Apache License 2.0](LICENSE)
 
 ## 项目简介
 
@@ -54,6 +55,29 @@
   NODE_VERSION = "20"
 ```
 
+## 为什么不使用 GitHub Pages 部署完整应用
+
+这个项目的正式解析需要服务端 API route 安全读取 `DEEPSEEK_API_KEY` 并调用 DeepSeek。GitHub Pages 是静态托管，不能安全运行这个后端接口。
+
+因此：
+
+- GitHub 用来公开代码、管理 issue、运行 CI。
+- Netlify 用来部署完整可用的网站。
+- 如果以后添加 GitHub Pages，也只适合展示文档页或静态介绍页，不适合承载完整占卜应用。
+
+## GitHub Actions
+
+仓库已配置 CI workflow，会在 push 到 `main` 或向 `main` 发起 pull request 时自动运行：
+
+```bash
+npm ci
+npm run lint
+npm run typecheck
+npm run build
+```
+
+CI 的目标是尽早发现格式、类型和构建问题。正式上线仍由 Netlify 自动部署完成。
+
 ## 环境变量
 
 正式解析由服务端调用 DeepSeek API。真实 API Key 不会写入代码，也不会暴露给前端。
@@ -101,9 +125,25 @@ http://localhost:3000
 
 本地抽牌解析需要在 `.env.local` 中配置 `DEEPSEEK_API_KEY`。如果没有配置，解析接口会提示配置缺失，不会生成假解析。
 
+提交前建议运行：
+
+```bash
+npm run lint
+npm run typecheck
+npm run build
+```
+
+## 贡献与安全
+
+- 贡献指南：[CONTRIBUTING.md](CONTRIBUTING.md)
+- 安全说明：[SECURITY.md](SECURITY.md)
+- 许可证：[Apache License 2.0](LICENSE)
+
+请不要在 issue、pull request、commit 或截图中暴露 `.env.local`、API Key 或任何访问令牌。
+
 ## 简历描述参考
 
-> 独立开发并部署上线一款基于 Next.js 的塔罗牌阵解析 Web 应用，设计了从主题选择、时间范围确认、牌阵选择、洗牌切牌、抽牌到 AI 解析的完整交互流程。项目接入 DeepSeek API，并将系统提示词和 API Key 放在服务端处理，避免敏感信息暴露到前端。使用 TypeScript、Tailwind CSS 和 Framer Motion 构建响应式界面，适配移动端选牌与阅读体验；通过 GitHub + Netlify 实现公开部署和 `main` 分支自动发布。
+> 独立开发并部署上线一款基于 Next.js 的塔罗牌阵解析 Web 应用，设计了从主题选择、时间范围确认、牌阵选择、洗牌切牌、抽牌到 AI 解析的完整交互流程。项目接入 DeepSeek API，并将系统提示词和 API Key 放在服务端处理，避免敏感信息暴露到前端。使用 TypeScript、Tailwind CSS 和 Framer Motion 构建响应式界面，适配移动端选牌与阅读体验；通过 GitHub + Netlify 实现公开部署、`main` 分支自动发布，并使用 GitHub Actions 进行 lint、类型检查和构建校验。
 
 ## 后续计划
 

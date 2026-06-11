@@ -1,0 +1,57 @@
+name: Bug report
+description: 报告一个可复现的问题
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈。请不要在 issue 中粘贴 API Key、`.env.local` 或任何敏感信息。
+  - type: textarea
+    id: summary
+    attributes:
+      label: 问题描述
+      description: 简要说明发生了什么。
+      placeholder: 例如：选择某个牌阵后，结果页没有显示正确的牌位。
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 请写出可以复现问题的步骤。
+      placeholder: |
+        1. 打开网站
+        2. 选择...
+        3. 点击...
+        4. 看到...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望结果
+      description: 你原本期望看到什么？
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际结果
+      description: 实际发生了什么？
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: 使用环境
+      placeholder: 例如：Chrome 126 / iPhone Safari / Windows 11
+    validations:
+      required: false
+  - type: textarea
+    id: extra
+    attributes:
+      label: 补充信息
+      description: 可以附截图，但请先确认截图里没有敏感信息。
+    validations:
+      required: false
